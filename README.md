@@ -45,7 +45,8 @@ between the two sides.
 #### `const method = rpc.register(id, opts)`
 Register a new RPC method for the given `id`
 
-`id` must be an `Integer` >= 0.
+* `id` must be an `Integer` >= 0.
+* `onrequest` can be an async function that returns a response, or throws an error
 
 If `onrequest` is provided, this method will be able to handle requests.
 
