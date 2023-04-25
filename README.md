@@ -17,7 +17,7 @@ const rpc2 = new RPC(send2)
 rpc1.register(0, {
   request: c.string,
   response: c.string,
-  onrequest: req => 'world'
+  onrequest: data => 'world'
 })
 const ping = rpc2.register(0, {
   request: c.string,
@@ -45,8 +45,7 @@ between the two sides.
 #### `const method = rpc.register(id, opts)`
 Register a new RPC method for the given `id`
 
-* `id` must be an `Integer` >= 0.
-* `onrequest` can be an async function that returns a response, or throws an error
+`id` must be an `Integer` >= 0.
 
 If `onrequest` is provided, this method will be able to handle requests.
 
@@ -59,11 +58,11 @@ If `onrequest` throws, the error will be forwarded back to the requester.
 {
   request: c.buffer, // The request encoding
   response: c.buffer, // The response encoding
-  onrequest: (req) => { ... } // A request handler
+  onrequest: data => { ... } // A request handler
 }
 ```
 
-#### `const response = await method.request(data)`
+### `const response = await method.request(data)`
 Send a request.
 
 `data` will be encoded with the request encoding.

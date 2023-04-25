@@ -1,35 +1,36 @@
 const c = require('compact-encoding')
+const safetyCatch = require('safety-catch')
 const b4a = require('b4a')
 
 const { MessageTypes, Header, Message, ErrorMessage } = require('./messages.js')
 
 class Request {
   constructor (method, id, type, data) {
-    this._type = type
-    this._id = id
-    this._method = method
-    this._sent = false
+    this.type = type
+    this.id = id
+    this.method = method
+    this.sent = false
     this.data = data
   }
 
   _respond (data) {
     if (this._sent) throw new Error('Response already sent')
-    this._sent = true
-    this._method._rpc._sendMessage({
+    this.sent = true
+    this.method._rpc._sendMessage({
       type: MessageTypes.Response,
-      id: this._id,
-      method: this._method,
-      data: c.encode(this._method._response, data)
+      id: this.id,
+      method: this.method,
+      data: c.encode(this.method._response, data)
     })
   }
 
   _error (err) {
     if (this._sent) throw new Error('Response already sent')
-    this._sent = true
-    this._method._rpc._sendMessage({
+    this.sent = true
+    this.method._rpc._sendMessage({
       type: MessageTypes.Error,
-      id: this._id,
-      method: this._method,
+      id: this.id,
+      method: this.method,
       data: c.encode(ErrorMessage, err)
     })
   }
@@ -46,10 +47,17 @@ class Method {
 
   async _callOnRequest (req) {
     try {
-      const data = await this._onrequest(req)
-      req._respond(data)
+      const data = await this._onrequest(req.data)
+      if (req.type === MessageTypes.Request) {
+        req._respond(data)
+      }
     } catch (err) {
-      req._error(err)
+      if (req.type === MessageTypes.Request) {
+        req._error(err)
+      } else {
+        // For Send messages, safetyCatch is sufficient
+        safetyCatch(err)
+      }
     }
   }
 
@@ -82,6 +90,15 @@ class Method {
       data: c.encode(this._request, data)
     })
     return req.promise
+  }
+
+  send (data) {
+    this._rpc._sendMessage({
+      id: 0,
+      type: MessageTypes.Send,
+      method: this._method,
+      data: c.encode(this._request, data)
+    })
   }
 }
 
@@ -138,7 +155,7 @@ module.exports = class TinyBufferRPC {
     const state = { start: 0, end: buf.length, buffer: buf }
     while (state.start < state.end) {
       const { id, type, method } = Header.decode(state)
-      if (type === MessageTypes.Request) {
+      if (type === MessageTypes.Request || type === MessageTypes.Send) {
         const handler = this._handlers[method]
         if (!handler) throw new Error('Got a request for an unsupported method')
         else handler._handleRequest(id, type, state)

@@ -10,8 +10,8 @@ test('basic request/response', async t => {
   rpc1.register(0, {
     request: c.string,
     response: c.string,
-    onrequest: req => {
-      t.is(req.data, 'hello')
+    onrequest: data => {
+      t.is(data, 'hello')
       return 'world'
     }
   })
@@ -37,7 +37,7 @@ test('parallel request/response', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onrequest: req => req.data
+    onrequest: data => data
   })
   const echo = rpc2.register(0, {
     request: c.uint,
@@ -68,7 +68,7 @@ test('batched request/response', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onrequest: req => req.data
+    onrequest: data => data
   })
   const echo = rpc2.register(0, {
     request: c.uint,
@@ -97,6 +97,38 @@ test('batched request/response', async t => {
   }
   function send2 (data) {
     send2Called = true
+    rpc1.recv(data)
+  }
+})
+
+test('send does not get responses', async t => {
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  const expected = [3, 2, 1]
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onrequest: data => {
+      t.is(data, expected.pop())
+    }
+  })
+  const ping = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  ping.send(1)
+  ping.send(2)
+  ping.send(3)
+
+  t.is(expected.length, 0)
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
     rpc1.recv(data)
   }
 })
