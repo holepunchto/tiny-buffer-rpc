@@ -62,7 +62,14 @@ If `onrequest` throws, the error will be forwarded back to the requester.
 }
 ```
 
-### `const response = await method.request(data)`
+#### `const response = await method.request(data)`
 Send a request.
+
+`data` will be encoded with the request encoding.
+
+#### `method.send(data)`
+Unidirectionally send data without expecting a response.
+
+Useful for sending events.
 
 `data` will be encoded with the request encoding.
