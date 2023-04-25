@@ -29,3 +29,74 @@ test('basic request/response', async t => {
     rpc1.recv(data)
   }
 })
+
+test('parallel request/response', async t => {
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onrequest: req => req.data
+  })
+  const echo = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  const requests = []
+  for (let i = 0; i < 10; i++) {
+    requests.push(echo.request(i))
+  }
+  const results = await Promise.all(requests)
+  for (let i = 0; i < results.length; i++) {
+    t.is(results[i], i)
+  }
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
+
+test('batched request/response', async t => {
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onrequest: req => req.data
+  })
+  const echo = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+  rpc2.cork()
+
+  let send2Called = false
+
+  const requests = []
+  for (let i = 0; i < 10; i++) {
+    requests.push(echo.request(i))
+  }
+
+  // send2 should not be called until rpc2 is uncorked
+  t.is(send2Called, false)
+
+  rpc2.uncork()
+  const results = await Promise.all(requests)
+  for (let i = 0; i < results.length; i++) {
+    t.is(results[i], i)
+  }
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    send2Called = true
+    rpc1.recv(data)
+  }
+})
