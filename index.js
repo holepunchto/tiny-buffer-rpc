@@ -57,7 +57,6 @@ class Method {
     if (!this._onrequest) throw new Error('Got a request for a method without an onrequest handler')
     const req = new Request(this, id, type, this._request.decode(state))
     this._callOnRequest(req)
-    this._onrequest(req)
   }
 
   _handleResponse (req, type, state) {
