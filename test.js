@@ -178,3 +178,135 @@ test('basic bidirectional stream', async t => {
     rpc1.recv(data)
   }
 })
+
+test('multiple parallel bidirectional streams, same method', async t => {
+  t.plan(12)
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  const expected1 = [1, 2, 2, 3]
+  const expected2 = [3, 4, 4, 5]
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      stream.on('data', data => {
+        stream.write(data)
+        stream.write(data + 1)
+      })
+      stream.once('end', () => {
+        t.pass('remote stream ended')
+        stream.end()
+      })
+    }
+  })
+  const ping = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  const s1 = ping.createRequestStream()
+  const s2 = ping.createRequestStream()
+  s1.write(1)
+  s1.write(2)
+  s2.write(3)
+  s2.write(4)
+  s1.end()
+  s2.end()
+
+  s1.on('data', data => {
+    t.is(data, expected1.shift())
+  })
+  s1.on('end', () => {
+    t.is(expected1.length, 0)
+  })
+  s2.on('data', data => {
+    t.is(data, expected2.shift())
+  })
+  s2.on('end', () => {
+    t.is(expected2.length, 0)
+  })
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
+
+test('multiple parallel bidirectional streams, different method', async t => {
+  t.plan(12)
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  const expected1 = [1, 2, 2, 3]
+  const expected2 = [3, 5, 4, 6]
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      stream.on('data', data => {
+        stream.write(data)
+        stream.write(data + 1)
+      })
+      stream.once('end', () => {
+        t.pass('remote stream ended')
+        stream.end()
+      })
+    }
+  })
+  rpc1.register(1, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      stream.on('data', data => {
+        stream.write(data)
+        stream.write(data + 2)
+      })
+      stream.once('end', () => {
+        t.pass('remote stream ended')
+        stream.end()
+      })
+    }
+  })
+  const ping1 = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+  const ping2 = rpc2.register(1, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  const s1 = ping1.createRequestStream()
+  const s2 = ping2.createRequestStream()
+  s1.write(1)
+  s1.write(2)
+  s2.write(3)
+  s2.write(4)
+  s1.end()
+  s2.end()
+
+  s1.on('data', data => {
+    t.is(data, expected1.shift())
+  })
+  s1.on('end', () => {
+    t.is(expected1.length, 0)
+  })
+  s2.on('data', data => {
+    t.is(data, expected2.shift())
+  })
+  s2.on('end', () => {
+    t.is(expected2.length, 0)
+  })
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})

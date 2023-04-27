@@ -260,7 +260,7 @@ class Method {
     // TODO: Should we buffer the remainder of the array?
     let stop = false
     for (const item of data) {
-      stop = stream.push(item)  
+      stop = stream.push(item)
     }
 
     if (stop === false) {
