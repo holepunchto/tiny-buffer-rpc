@@ -74,9 +74,9 @@ class RPCStream extends Duplex {
     this._remotePaused = true
     this._sentPause = false
 
-    this._nextBatch = null
-    this._nextCb = null
-    this._remoteOpenCb = null
+    this._writeBatch = null
+    this._writeCallback = null
+    this._openCallback = null
   }
 
   _sendBatch (batch) {
@@ -88,11 +88,7 @@ class RPCStream extends Duplex {
 
   _remoteOpened (remoteId) {
     this._remoteId = remoteId
-    if (!this._remoteOpenCb) return
-
-    const cb = this._remoteOpenCb
-    this._remoteOpenCb = null
-    cb()
+    this._continueOpen(null)
   }
 
   _remotePause () {
@@ -101,14 +97,11 @@ class RPCStream extends Duplex {
 
   _remoteResume () {
     this._remotePaused = false
-    if (!this._nextBatch) return
+    if (!this._writeBatch) return
 
-    this._sendBatch(this._nextBatch)
-    this._nextBatch = null
-
-    const cb = this._nextCb
-    this._nextCb = null
-    cb()
+    this._sendBatch(this._writeBatch)
+    this._writeBatch = null
+    this._continueWrite(null)
   }
 
   _open (cb) {
@@ -121,10 +114,17 @@ class RPCStream extends Duplex {
     this._method._sendMessage(id, bitfield, data)
 
     if (this._initiator) {
-      this._remoteOpenCb = cb
+      this._openCallback = cb
     } else {
       cb()
     }
+  }
+
+  _continueOpen (err) {
+    if (this._openCallback === null) return
+    const cb = this._openCallback
+    this._openCallback = null
+    cb(err)
   }
 
   _read (cb) {
@@ -134,12 +134,19 @@ class RPCStream extends Duplex {
 
   _writev (batch, cb) {
     if (this._remotePaused) {
-      this._nextBatch = batch
-      this._nextCb = cb
+      this._writeBatch = batch
+      this._writeCallback = cb
     } else {
       this._sendBatch(batch)
       cb()
     }
+  }
+
+  _continueWrite (err) {
+    if (this._writeCallback === null) return
+    const cb = this._writeCallback
+    this._writeCallback = null
+    cb(err)
   }
 
   _final (cb) {
@@ -148,12 +155,8 @@ class RPCStream extends Duplex {
   }
 
   _predestroy () {
-    if (!this._nextCb) return
-
-    const cb = this._nextCb
-    this._nextCb = null
-
-    cb()
+    this._continueWrite(null)
+    this._continueOpen(null)
   }
 
   _destroy (cb) {
