@@ -8,7 +8,7 @@ npm i tiny-buffer-rpc
   
 ### Usage
 ```js
-const RPC = require('tiny-buffer-rpc')  
+const RPC = require('@holepunchto/tiny-buffer-rpc')  
 const c = require('compact-encoding')
 
 const rpc1 = new RPC(send1)
