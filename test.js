@@ -30,6 +30,33 @@ test('basic request/response', async t => {
   }
 })
 
+test('basic request/response at ID > 0', async t => {
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  rpc1.register(1, {
+    request: c.string,
+    response: c.string,
+    onrequest: data => {
+      t.is(data, 'hello')
+      return 'world'
+    }
+  })
+  const ping = rpc2.register(1, {
+    request: c.string,
+    response: c.string
+  })
+
+  t.is(await ping.request('hello'), 'world')
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
+
 test('parallel request/response', async t => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
