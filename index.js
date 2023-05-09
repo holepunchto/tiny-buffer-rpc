@@ -45,7 +45,7 @@ class Request {
     this.method._rpc._sendMessage({
       bitfield: MESSAGE_RESPONSE,
       id: this.id,
-      method: this.method,
+      method: this.method._method,
       data: c.encode(this.method._response, data)
     })
   }
