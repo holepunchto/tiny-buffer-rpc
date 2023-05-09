@@ -1,28 +1,21 @@
 const c = require('compact-encoding')
 
-module.exports.MessageTypes = {
-  Send: 0,
-  Request: 1,
-  Response: 2,
-  Error: 3
-}
-
 const Header = {
   preencode (state, h) {
-    c.uint.preencode(state, h.type)
-    c.uint.preencode(state, h.id)
     c.uint.preencode(state, h.method)
+    c.uint.preencode(state, h.id)
+    c.uint.preencode(state, h.bitfield)
   },
   encode (state, h) {
-    c.uint.encode(state, h.type)
-    c.uint.encode(state, h.id)
     c.uint.encode(state, h.method)
+    c.uint.encode(state, h.id)
+    c.uint.encode(state, h.bitfield)
   },
   decode (state) {
     return {
-      type: c.uint.decode(state),
+      method: c.uint.decode(state),
       id: c.uint.decode(state),
-      method: c.uint.decode(state)
+      bitfield: c.uint.decode(state)
     }
   }
 }
@@ -31,11 +24,11 @@ module.exports.Header = Header
 module.exports.Message = {
   preencode (state, m) {
     Header.preencode(state, m)
-    c.raw.preencode(state, m.data)
+    if (m.data) c.raw.preencode(state, m.data)
   },
   encode (state, m) {
     Header.encode(state, m)
-    c.raw.encode(state, m.data)
+    if (m.data) c.raw.encode(state, m.data)
   },
   decode (state) {
     return {

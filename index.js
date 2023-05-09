@@ -1,8 +1,34 @@
+const { getStreamError, Duplex } = require('streamx')
 const c = require('compact-encoding')
 const safetyCatch = require('safety-catch')
 const b4a = require('b4a')
 
-const { MessageTypes, Header, Message, ErrorMessage } = require('./messages.js')
+// Primary message flags (4 bits)
+const MESSAGE_SEND = 0b0001
+const MESSAGE_REQUEST = 0b0010
+const MESSAGE_RESPONSE = 0b0100
+const MESSAGE_ERROR = 0b1000
+
+// Stream message flags (6 bits, with a 4 bit offset for primary message flags)
+const STREAMING_MASK = ((1 << 6) - 1) << 4
+const STREAM_OPEN = 0b000001 << 4
+const STREAM_CLOSE = 0b000010 << 4
+const STREAM_PAUSE = 0b000100 << 4
+const STREAM_RESUME = 0b001000 << 4
+const STREAM_DATA = 0b010000 << 4
+const STREAM_END = 0b100000 << 4
+
+// Stream status flags (2 bits, with a 10 bit offset)
+const STREAM_IS_INITIATOR = 0b01 << 10
+const STREAM_HAS_ERROR = 0b10 << 10
+
+const REQUEST = MESSAGE_SEND | MESSAGE_REQUEST
+
+const {
+  Header,
+  Message,
+  ErrorMessage
+} = require('./messages.js')
 
 class Request {
   constructor (method, id, type, data) {
@@ -17,7 +43,7 @@ class Request {
     if (this._sent) throw new Error('Response already sent')
     this.sent = true
     this.method._rpc._sendMessage({
-      type: MessageTypes.Response,
+      bitfield: MESSAGE_RESPONSE,
       id: this.id,
       method: this.method,
       data: c.encode(this.method._response, data)
@@ -28,7 +54,7 @@ class Request {
     if (this._sent) throw new Error('Response already sent')
     this.sent = true
     this.method._rpc._sendMessage({
-      type: MessageTypes.Error,
+      bitfield: MESSAGE_ERROR,
       id: this.id,
       method: this.method,
       data: c.encode(ErrorMessage, err)
@@ -36,39 +62,250 @@ class Request {
   }
 }
 
+class RPCStream extends Duplex {
+  constructor (method, id, initiator, remoteId) {
+    super()
+    this._method = method
+    this._initiator = initiator
+
+    this._localId = id
+    this._remoteId = remoteId || 0
+
+    this._remotePaused = true
+    this._sentPause = false
+
+    this._nextBatch = null
+    this._nextCb = null
+    this._remoteOpenCb = null
+  }
+
+  _sendBatch (batch) {
+    const bitfield = MESSAGE_SEND | STREAM_DATA
+    const dataEncoding = this._initiator ? this._method._responseArray : this._method._requestArray
+    const data = c.encode(dataEncoding, batch)
+    this._method._sendMessage(this._remoteId, bitfield, data)
+  }
+
+  _remoteOpened (remoteId) {
+    this._remoteId = remoteId
+    if (!this._remoteOpenCb) return
+
+    const cb = this._remoteOpenCb
+    this._remoteOpenCb = null
+    cb()
+  }
+
+  _remotePause () {
+    this._remotePaused = true
+  }
+
+  _remoteResume () {
+    this._remotePaused = false
+    if (!this._nextBatch) return
+
+    this._sendBatch(this._nextBatch)
+    this._nextBatch = null
+
+    const cb = this._nextCb
+    this._nextCb = null
+    cb()
+  }
+
+  _open (cb) {
+    let bitfield = MESSAGE_SEND | STREAM_OPEN
+    if (this._initiator) bitfield |= STREAM_IS_INITIATOR
+
+    const id = this._initiator ? this._localId : this._remoteId
+    const data = this._initiator ? null : c.encode(c.uint, this._localId)
+
+    this._method._sendMessage(id, bitfield, data)
+
+    if (this._initiator) {
+      this._remoteOpenCb = cb
+    } else {
+      cb()
+    }
+  }
+
+  _read (cb) {
+    this._method._sendMessage(this._remoteId, MESSAGE_SEND | STREAM_RESUME)
+    cb()
+  }
+
+  _writev (batch, cb) {
+    if (this._remotePaused) {
+      this._nextBatch = batch
+      this._nextCb = cb
+    } else {
+      this._sendBatch(batch)
+      cb()
+    }
+  }
+
+  _final (cb) {
+    this._method._sendMessage(this._remoteId, MESSAGE_SEND | STREAM_END)
+    cb()
+  }
+
+  _predestroy () {
+    if (!this._nextCb) return
+
+    const cb = this._nextCb
+    this._nextCb = null
+
+    cb()
+  }
+
+  _destroy (cb) {
+    const err = getStreamError(this)
+
+    let bitfield = MESSAGE_SEND | STREAM_CLOSE
+    if (err) bitfield |= STREAM_HAS_ERROR
+    const data = err ? c.encode(ErrorMessage, err) : null
+
+    this._method._sendMessage(this._remoteId, bitfield, data)
+    cb()
+  }
+}
+
 class Method {
-  constructor (rpc, method, { request, response, onrequest } = {}) {
+  constructor (rpc, method, { request, response, onrequest, onstream } = {}) {
     this._rpc = rpc
     this._method = method
+
     this._request = request || c.buffer
     this._response = response || c.buffer
+    this._requestArray = c.array(this._request)
+    this._responseArray = c.array(this._response)
+
     this._onrequest = onrequest
+    this._onstream = onstream
+
+    this._streams = []
+    this._free = []
   }
 
   async _callOnRequest (req) {
     try {
       const data = await this._onrequest(req.data)
-      if (req.type === MessageTypes.Request) {
-        req._respond(data)
-      }
+      req._respond(data)
     } catch (err) {
-      if (req.type === MessageTypes.Request) {
-        req._error(err)
-      } else {
-        // For Send messages, safetyCatch is sufficient
-        safetyCatch(err)
+      req._error(err)
+    }
+  }
+
+  async _callOnSend (data) {
+    try {
+      await this._onrequest(data)
+    } catch (err) {
+      safetyCatch(err)
+    }
+  }
+
+  _createStream (initiator, remoteId) {
+    const id = this._free.length ? this._free.pop() : (this._streams.push(null) - 1)
+    const stream = new RPCStream(this, id, initiator, remoteId)
+    this._streams[id] = stream
+    return stream
+  }
+
+  _handleStreamOpen (id, bitfield, state) {
+    if (bitfield & STREAM_IS_INITIATOR) {
+      // Create the responder stream
+      const stream = this._createStream(false, id)
+      this._onstream(stream)
+    } else {
+      const stream = this._streams[id]
+      stream._remoteOpened(c.uint.decode(state))
+    }
+  }
+
+  _handleStreamClose (id, bitfield, state) {
+    const stream = this._streams[id]
+    if (bitfield & STREAM_HAS_ERROR) {
+      const err = ErrorMessage.decode(state)
+      stream.destroy(err)
+    } else if (!stream._initiator) {
+      stream.destroy()
+    }
+    this._streams[id] = null
+    this._free.push(id)
+  }
+
+  _handleStreamPause (id) {
+    const stream = this._streams[id]
+    stream._remotePause()
+  }
+
+  _handleStreamResume (id) {
+    const stream = this._streams[id]
+    stream._remoteResume()
+  }
+
+  _handleStreamEnd (id) {
+    const stream = this._streams[id]
+    stream.push(null)
+  }
+
+  _handleStreamData (id, state) {
+    const stream = this._streams[id]
+
+    let data = null
+    if (stream._initiator) {
+      data = this._responseArray.decode(state)
+    } else {
+      data = this._requestArray.decode(state)
+    }
+
+    // TODO: Should we buffer the remainder of the array?
+    let stop = false
+    for (const item of data) {
+      stop = stream.push(item)
+    }
+
+    if (stop === false) {
+      if (!stream._sentPause) {
+        stream._sentPause = true
+        this._sendMessage(stream._remoteId, MESSAGE_SEND | STREAM_PAUSE)
       }
     }
   }
 
-  _handleRequest (id, type, state) {
-    if (!this._onrequest) throw new Error('Got a request for a method without an onrequest handler')
-    const req = new Request(this, id, type, this._request.decode(state))
-    this._callOnRequest(req)
+  _handleStreamSend (id, bitfield, state) {
+    if (bitfield & STREAM_OPEN) {
+      this._handleStreamOpen(id, bitfield, state)
+    } else if (bitfield & STREAM_CLOSE) {
+      this._handleStreamClose(id, bitfield, state)
+    } else if (bitfield & STREAM_PAUSE) {
+      this._handleStreamPause(id)
+    } else if (bitfield & STREAM_RESUME) {
+      this._handleStreamResume(id)
+    } else if (bitfield & STREAM_DATA) {
+      this._handleStreamData(id, state)
+    } else if (bitfield & STREAM_END) {
+      this._handleStreamEnd(id)
+    }
   }
 
-  _handleResponse (req, type, state) {
-    if (type === MessageTypes.Error) {
+  _handleSend (id, bitfield, state) {
+    if (bitfield & STREAMING_MASK) {
+      this._handleStreamSend(id, bitfield, state)
+    } else {
+      this._callOnSend(this._request.decode(state))
+    }
+  }
+
+  _handleRequest (id, bitfield, state) {
+    if (bitfield & MESSAGE_SEND) {
+      this._handleSend(id, bitfield, state)
+    } else {
+      const req = new Request(this, id, bitfield, this._request.decode(state))
+      this._callOnRequest(req)
+    }
+  }
+
+  _handleResponse (req, bitfield, state) {
+    if (bitfield & MESSAGE_ERROR) {
       const { code, message, stack } = ErrorMessage.decode(state)
       const err = new Error()
       err.code = code
@@ -81,24 +318,27 @@ class Method {
     this._rpc._free.push(req.id)
   }
 
-  request (data) {
-    const req = this._rpc._req()
+  _sendMessage (id, bitfield, data) {
     this._rpc._sendMessage({
-      id: req.id,
-      type: MessageTypes.Request,
       method: this._method,
-      data: c.encode(this._request, data)
+      bitfield,
+      id,
+      data
     })
+  }
+
+  request (data) {
+    const req = this._rpc._createRequest()
+    this._sendMessage(req.id, MESSAGE_REQUEST, c.encode(this._request, data))
     return req.promise
   }
 
   send (data) {
-    this._rpc._sendMessage({
-      id: 0,
-      type: MessageTypes.Send,
-      method: this._method,
-      data: c.encode(this._request, data)
-    })
+    this._sendMessage(0, MESSAGE_SEND, c.encode(this._request, data))
+  }
+
+  createRequestStream (data) {
+    return this._createStream(true, data)
   }
 }
 
@@ -112,8 +352,8 @@ module.exports = class TinyBufferRPC {
     this._corked = false
   }
 
-  _req () {
-    const id = this._free.length ? this._free.pop() : this._reqs.push(null)
+  _createRequest () {
+    const id = this._free.length ? this._free.pop() : (this._reqs.push(null) - 1)
     const req = { id, promise: null, resolve: null, reject: null }
     this._reqs[id] = req
     req.promise = new Promise((resolve, reject) => {
@@ -132,7 +372,7 @@ module.exports = class TinyBufferRPC {
     this._send(data)
   }
 
-  register (id, opts) {
+  register (id, opts = {}) {
     if (this._handlers[id]) throw new Error('Handler for this ID already exists')
     while (this._handlers.length <= id) this._handlers.push(null)
     const method = new Method(this, id, opts)
@@ -154,17 +394,17 @@ module.exports = class TinyBufferRPC {
   recv (buf) {
     const state = { start: 0, end: buf.length, buffer: buf }
     while (state.start < state.end) {
-      const { id, type, method } = Header.decode(state)
-      if (type === MessageTypes.Request || type === MessageTypes.Send) {
+      const { id, bitfield, method } = Header.decode(state)
+      if (bitfield & REQUEST) {
         const handler = this._handlers[method]
         if (!handler) throw new Error('Got a request for an unsupported method')
-        else handler._handleRequest(id, type, state)
+        else handler._handleRequest(id, bitfield, state)
       } else {
         const req = this._reqs[id]
         const handler = this._handlers[method]
         if (!req) throw new Error('Got a response for an invalid request ID')
         if (!handler) throw new Error('Got a response for an invalid method ID')
-        handler._handleResponse(req, type, state)
+        handler._handleResponse(req, bitfield, state)
       }
     }
   }
