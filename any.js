@@ -1,6 +1,8 @@
 // This file is a tmp workaround until variadic args land in tiny-buffer-rpc
 
+const b4a = require('b4a')
 const c = require('compact-encoding')
+const { uint, utf8 } = c
 
 const anyUndefined = {
   preencode (state, n) {
