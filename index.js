@@ -64,15 +64,17 @@ class Request {
 
 class RPCStream extends Duplex {
   constructor (method, id, initiator, remoteId) {
-    super()
+    super({ eagerOpen: true })
+
     this._method = method
     this._initiator = initiator
 
     this._localId = id
-    this._remoteId = remoteId || 0
+    this._remoteId = remoteId
 
     this._remotePaused = true
     this._sentPause = false
+    this._sentOpen = false
 
     this._writeBatch = null
     this._writeCallback = null
@@ -104,14 +106,21 @@ class RPCStream extends Duplex {
     this._continueWrite(null)
   }
 
-  _open (cb) {
+  _sendOpen () {
+    if (this._sentOpen) return
+
     let bitfield = MESSAGE_SEND | STREAM_OPEN
     if (this._initiator) bitfield |= STREAM_IS_INITIATOR
 
     const id = this._initiator ? this._localId : this._remoteId
     const data = this._initiator ? null : c.encode(c.uint, this._localId)
 
+    this._sentOpen = true
     this._method._sendMessage(id, bitfield, data)
+  }
+
+  _open (cb) {
+    this._sendOpen()
 
     if (this._initiator) {
       this._openCallback = cb
@@ -156,10 +165,11 @@ class RPCStream extends Duplex {
 
   _predestroy () {
     this._continueWrite(null)
-    this._continueOpen(null)
   }
 
   _destroy (cb) {
+    this._sendOpen() // just incase we got here pre open
+
     const err = getStreamError(this)
 
     let bitfield = MESSAGE_SEND | STREAM_CLOSE
@@ -341,8 +351,8 @@ class Method {
     this._sendMessage(0, MESSAGE_SEND, c.encode(this._request, data))
   }
 
-  createRequestStream (data) {
-    return this._createStream(true, data)
+  createRequestStream () {
+    return this._createStream(true, -1)
   }
 }
 
