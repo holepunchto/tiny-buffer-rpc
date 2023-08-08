@@ -237,21 +237,22 @@ class Method {
 
   _handleStreamPause (id) {
     const stream = this._streams[id]
-    stream._remotePause()
+    if (stream) stream._remotePause()
   }
 
   _handleStreamResume (id) {
     const stream = this._streams[id]
-    stream._remoteResume()
+    if (stream) stream._remoteResume()
   }
 
   _handleStreamEnd (id) {
     const stream = this._streams[id]
-    stream.push(null)
+    if (stream) stream.push(null)
   }
 
   _handleStreamData (id, state) {
     const stream = this._streams[id]
+    if (!stream) return
 
     let data = null
     if (stream._initiator) {
