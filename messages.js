@@ -1,17 +1,24 @@
 const c = require('compact-encoding')
 
+const KNOWN_BYTE = 0x74
+
 const Header = {
   preencode (state, h) {
+    c.uint.preencode(state, KNOWN_BYTE)
     c.uint.preencode(state, h.method)
     c.uint.preencode(state, h.id)
     c.uint.preencode(state, h.bitfield)
   },
   encode (state, h) {
+    c.uint.encode(state, KNOWN_BYTE)
     c.uint.encode(state, h.method)
     c.uint.encode(state, h.id)
     c.uint.encode(state, h.bitfield)
   },
   decode (state) {
+    const known = c.uint.decode(state)
+    if (known !== KNOWN_BYTE) throw Error('Message does not look like a TinyRPC message')
+
     return {
       method: c.uint.decode(state),
       id: c.uint.decode(state),
