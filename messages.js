@@ -1,6 +1,6 @@
 const c = require('compact-encoding')
 
-const KNOWN_BYTE = 0x74
+const KNOWN_BYTE = 0x74 // 't' for tiny-buffer-rpc
 
 const Header = {
   preencode (state, h) {
