@@ -162,10 +162,9 @@ test('send does not get responses', async t => {
 
 test('eager teardown of stream', async t => {
   t.plan(2)
+
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
-
-  const expected = [1, 2, 2, 3]
 
   rpc1.register(0, {
     request: c.uint,
@@ -180,7 +179,7 @@ test('eager teardown of stream', async t => {
   })
 
   const s = ping.createRequestStream()
-  s.on('error', function (err) {
+  s.on('error', function () {
     t.pass('got error')
   })
   s.on('close', function () {
