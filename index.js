@@ -168,7 +168,12 @@ class RPCStream extends Duplex {
   }
 
   _destroy (cb) {
-    this._sendOpen() // just incase we got here pre open
+    if (this._remoteId === -1) {
+      // only happens if we are the initiator and we didn't open
+      // if so - all is good we never told the other side about this
+      cb()
+      return
+    }
 
     const err = getStreamError(this)
 

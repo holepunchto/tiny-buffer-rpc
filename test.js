@@ -160,6 +160,41 @@ test('send does not get responses', async t => {
   }
 })
 
+test('eager teardown of stream', async t => {
+  t.plan(2)
+
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      t.fail('should never get here')
+    }
+  })
+  const ping = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  const s = ping.createRequestStream()
+  s.on('error', function () {
+    t.pass('got error')
+  })
+  s.on('close', function () {
+    t.pass('got close')
+  })
+  s.destroy(new Error('stop'))
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
+
 test('basic bidirectional stream', async t => {
   t.plan(6)
   const rpc1 = new RPC(send1)
