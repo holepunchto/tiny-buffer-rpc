@@ -1,4 +1,5 @@
 const c = require('compact-encoding')
+const any = require('./any')
 
 const KNOWN_BYTE = 0x74 // 't' for tiny-buffer-rpc
 
@@ -48,13 +49,13 @@ module.exports.Message = {
 module.exports.ErrorMessage = {
   preencode (state, e) {
     state.end++ // flags
-    c.uint.preencode(state, e.code)
+    any.preencode(state, e.code)
     if (e.message) c.string.preencode(state, e.message)
     if (e.stack) c.string.preencode(state, e.stack)
   },
   encode (state, e) {
     const start = state.start++ // flags
-    c.uint.encode(state, e.code)
+    any.encode(state, e.code)
 
     let flags = 0
     if (e.message) {
@@ -71,7 +72,7 @@ module.exports.ErrorMessage = {
   decode (state) {
     const flags = c.uint.decode(state)
     return {
-      code: c.uint.decode(state),
+      code: any.decode(state),
       message: (flags & 1) !== 0 ? c.string.decode(state) : null,
       stack: (flags & 2) !== 0 ? c.string.decode(state) : null
     }
