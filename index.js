@@ -325,11 +325,12 @@ class Method {
 
   _handleResponse (req, bitfield, state) {
     if (bitfield & MESSAGE_ERROR) {
-      const { code, message, stack } = ErrorMessage.decode(state)
+      const { errno, message, stack, code } = ErrorMessage.decode(state)
       const err = new Error()
-      err.code = code
+      err.errno = errno
       err.message = message
       err.stack = stack
+      err.code = code
       req.reject(err)
     } else {
       req.resolve(this._response.decode(state))
