@@ -48,13 +48,14 @@ module.exports.Message = {
 module.exports.ErrorMessage = {
   preencode (state, e) {
     state.end++ // flags
-    c.uint.preencode(state, e.code)
+    c.int.preencode(state, e.errno || 0)
     if (e.message) c.string.preencode(state, e.message)
     if (e.stack) c.string.preencode(state, e.stack)
+    if (e.code) c.string.preencode(state, e.code)
   },
   encode (state, e) {
     const start = state.start++ // flags
-    c.uint.encode(state, e.code)
+    c.int.encode(state, e.errno || 0)
 
     let flags = 0
     if (e.message) {
@@ -65,15 +66,20 @@ module.exports.ErrorMessage = {
       flags |= 2
       c.string.encode(state, e.stack)
     }
+    if (e.code) {
+      flags |= 4
+      c.string.encode(state, e.code)
+    }
 
     state.buffer[start] = flags
   },
   decode (state) {
     const flags = c.uint.decode(state)
     return {
-      code: c.uint.decode(state),
+      errno: c.int.decode(state),
       message: (flags & 1) !== 0 ? c.string.decode(state) : null,
-      stack: (flags & 2) !== 0 ? c.string.decode(state) : null
+      stack: (flags & 2) !== 0 ? c.string.decode(state) : null,
+      code: (flags & 4) !== 0 ? c.string.decode(state) : null
     }
   }
 }
