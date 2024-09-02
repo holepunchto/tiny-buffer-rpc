@@ -79,8 +79,6 @@ class RPCStream extends Duplex {
     this._writeBatch = null
     this._writeCallback = null
     this._openCallback = null
-
-    this._remoteClosed = false
   }
 
   _sendBatch (batch) {
@@ -93,6 +91,10 @@ class RPCStream extends Duplex {
   _remoteOpened (remoteId) {
     this._remoteId = remoteId
     this._continueOpen(null)
+  }
+
+  _remoteClosed () {
+    this._remoteId = -1
   }
 
   _remotePause () {
@@ -170,7 +172,7 @@ class RPCStream extends Duplex {
   }
 
   _destroy (cb) {
-    if (this._remoteClosed || this._remoteId === -1) {
+    if (this._remoteId === -1) {
       // if the remote side already sent a close or we are the initiator and we didn't open,
       // then we don't need to send a close message
       cb()
@@ -242,7 +244,7 @@ class Method {
 
   _handleStreamClose (id, bitfield, state) {
     const stream = this._streams[id]
-    stream._remoteClosed = true
+    stream._remoteClosed()
     if (bitfield & STREAM_HAS_ERROR) {
       const err = ErrorMessage.decode(state)
       stream.destroy(err)
