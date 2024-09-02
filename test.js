@@ -372,3 +372,75 @@ test('multiple parallel bidirectional streams, different method', async t => {
     rpc1.recv(data)
   }
 })
+
+test('basic bidirectional stream, remote destroys', async t => {
+  t.plan(2)
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      stream.on('data', data => {
+        stream.destroy()
+      })
+      stream.on('close', () => {
+        t.pass('remote stream closed')
+      })
+    }
+  })
+  const ping = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  const s = ping.createRequestStream()
+  s.write(1)
+  s.on('close', () => {
+    t.pass('stream closed')
+  })
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
+
+test('basic bidirectional stream, initator destroys', async t => {
+  t.plan(2)
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      stream.write(1)
+      stream.on('close', () => {
+        t.pass('remote stream closed')
+      })
+    }
+  })
+  const ping = rpc2.register(0, {
+    request: c.uint,
+    response: c.uint
+  })
+
+  const s = ping.createRequestStream()
+  s.on('data', data => {
+    s.destroy()
+  })
+  s.on('close', () => {
+    t.pass('stream closed')
+  })
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
