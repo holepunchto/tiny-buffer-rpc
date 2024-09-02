@@ -240,6 +240,7 @@ class Method {
 
   _handleStreamClose (id, bitfield, state) {
     const stream = this._streams[id]
+    stream._remoteId = -1
     if (bitfield & STREAM_HAS_ERROR) {
       const err = ErrorMessage.decode(state)
       stream.destroy(err)
