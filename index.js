@@ -195,6 +195,8 @@ class RPCStream extends Duplex {
 
 class Method {
   constructor (rpc, method, { request, response, onrequest, onstream } = {}) {
+    this.destroyed = false
+
     this._rpc = rpc
     this._method = method
 
@@ -322,6 +324,7 @@ class Method {
   }
 
   _handleRequest (id, bitfield, state) {
+    if (this.destroyed) return
     if (bitfield & MESSAGE_SEND) {
       this._handleSend(id, bitfield, state)
     } else {
@@ -331,6 +334,7 @@ class Method {
   }
 
   _handleResponse (req, bitfield, state) {
+    if (this.destroyed) return
     if (bitfield & MESSAGE_ERROR) {
       const { errno, message, stack, code } = ErrorMessage.decode(state)
       const err = new Error()
@@ -342,6 +346,7 @@ class Method {
     } else {
       req.resolve(this._response.decode(state))
     }
+    this._rpc._reqs[req.id] = null
     this._rpc._free.push(req.id)
   }
 
@@ -355,17 +360,28 @@ class Method {
   }
 
   request (data) {
+    if (this.destroyed) return Promise.reject(new Error('RPC destroyed'))
     const req = this._rpc._createRequest()
     this._sendMessage(req.id, MESSAGE_REQUEST, c.encode(this._request, data))
     return req.promise
   }
 
   send (data) {
+    if (this.destroyed) return
     this._sendMessage(0, MESSAGE_SEND, c.encode(this._request, data))
   }
 
   createRequestStream () {
+    if (this.destroyed) throw new Error('RPC destroyed')
     return this._createStream(true, -1)
+  }
+
+  destroy () {
+    this.destroyed = true
+    for (const s of this._streams) {
+      if (s === null) continue
+      s.destroy(new Error('RPC destroyed'))
+    }
   }
 }
 
@@ -433,6 +449,18 @@ module.exports = class TinyBufferRPC {
         if (!handler) throw new Error('Got a response for an invalid method ID')
         handler._handleResponse(req, bitfield, state)
       }
+    }
+  }
+
+  destroy () {
+    while (this._reqs.length) {
+      const req = this._reqs.pop()
+      if (req === null) continue
+      req.reject(new Error('RPC destroyed'))
+    }
+    for (const h of this._handlers) {
+      if (h === null) continue
+      h.destroy()
     }
   }
 }
