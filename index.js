@@ -175,7 +175,7 @@ class RPCStream extends Duplex {
   }
 
   _destroy (cb) {
-    if (this._remoteId === -1 || this._initiatedDestroy === false) {
+    if (this._remoteId === -1 || this._initiatedDestroy === false || this._method.destroyed) {
       // if the remote side already sent a close or we are the initiator and we didn't open,
       // then we don't need to send a close message
       cb()
@@ -387,6 +387,7 @@ class Method {
 
 module.exports = class TinyBufferRPC {
   constructor (send) {
+    this.destroyed = false
     this._send = send
     this._handlers = []
     this._pending = []
@@ -407,6 +408,7 @@ module.exports = class TinyBufferRPC {
   }
 
   _sendMessage (msg) {
+    if (this.destroyed) return
     const data = c.encode(Message, msg)
     if (this._corked) {
       this._pending.push(data)
@@ -430,7 +432,7 @@ module.exports = class TinyBufferRPC {
   uncork () {
     this._corked = false
     // TODO: Use a slab pattern here to avoid the concat
-    this._send(b4a.concat(this._pending))
+    if (!this.destroyed) this._send(b4a.concat(this._pending))
     this._pending = []
   }
 
@@ -453,6 +455,7 @@ module.exports = class TinyBufferRPC {
   }
 
   destroy () {
+    this.destroyed = true
     while (this._reqs.length) {
       const req = this._reqs.pop()
       if (req === null) continue
