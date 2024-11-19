@@ -56,7 +56,7 @@ class Request {
     this.method._rpc._sendMessage({
       bitfield: MESSAGE_ERROR,
       id: this.id,
-      method: this.method,
+      method: this.method._method,
       data: c.encode(ErrorMessage, err)
     })
   }
