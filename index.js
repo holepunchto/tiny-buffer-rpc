@@ -63,7 +63,7 @@ class Request {
 }
 
 class RPCStream extends Duplex {
-  constructor (method, id, initiator, remoteId) {
+  constructor (method, id, initiator, remoteId, dedup) {
     super({ eagerOpen: true })
 
     this._method = method
@@ -71,6 +71,8 @@ class RPCStream extends Duplex {
 
     this._localId = id
     this._remoteId = remoteId
+    this._dedup = dedup
+    this._lastMessage = null
 
     this._remotePaused = true
     this._sentPause = false
@@ -86,6 +88,12 @@ class RPCStream extends Duplex {
     const bitfield = MESSAGE_SEND | STREAM_DATA
     const dataEncoding = this._initiator ? this._method._responseArray : this._method._requestArray
     const data = c.encode(dataEncoding, batch)
+
+    if (this._dedup) {
+      if (this._lastMessage && b4a.equals(this._lastMessage, data)) return
+      this._lastMessage = data
+    }
+
     this._method._sendMessage(this._remoteId, bitfield, data)
   }
 
@@ -194,7 +202,7 @@ class RPCStream extends Duplex {
 }
 
 class Method {
-  constructor (rpc, method, { request, response, onrequest, onstream } = {}) {
+  constructor (rpc, method, { request, response, dedup = false, onrequest, onstream } = {}) {
     this.destroyed = false
 
     this._rpc = rpc
@@ -205,6 +213,7 @@ class Method {
     this._requestArray = c.array(this._request)
     this._responseArray = c.array(this._response)
 
+    this._dedup = dedup
     this._onrequest = onrequest
     this._onstream = onstream
 
@@ -231,7 +240,7 @@ class Method {
 
   _createStream (initiator, remoteId) {
     const id = this._free.length ? this._free.pop() : (this._streams.push(null) - 1)
-    const stream = new RPCStream(this, id, initiator, remoteId)
+    const stream = new RPCStream(this, id, initiator, remoteId, this._dedup)
     this._streams[id] = stream
     return stream
   }

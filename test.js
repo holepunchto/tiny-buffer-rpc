@@ -444,3 +444,54 @@ test('basic bidirectional stream, initator destroys', async t => {
     rpc1.recv(data)
   }
 })
+
+test('dedup bidirectional stream', async t => {
+  t.plan(4)
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  const expected = [1, 2]
+
+  rpc1.register(0, {
+    request: c.uint,
+    response: c.uint,
+    onstream: stream => {
+      stream.on('data', data => {
+        stream.write(data)
+      })
+      stream.once('end', () => {
+        t.pass('remote stream ended')
+        stream.end()
+      })
+    }
+  })
+  const ping = rpc2.register(0, {
+    dedup: true,
+    request: c.uint,
+    response: c.uint
+  })
+
+  const s = ping.createRequestStream()
+  s.write(1)
+  await new Promise(resolve => setTimeout(resolve, 100))
+  s.write(1)
+  await new Promise(resolve => setTimeout(resolve, 100))
+  s.write(1)
+  await new Promise(resolve => setTimeout(resolve, 100))
+  s.write(2)
+  s.end()
+
+  s.on('data', data => {
+    t.is(data, expected.shift())
+  })
+  s.on('end', () => {
+    t.is(expected.length, 0)
+  })
+
+  function send1 (data) {
+    rpc2.recv(data)
+  }
+  function send2 (data) {
+    rpc1.recv(data)
+  }
+})
