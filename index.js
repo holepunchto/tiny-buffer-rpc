@@ -40,7 +40,7 @@ class Request {
   }
 
   _respond (data) {
-    if (this._sent) throw new Error('Response already sent')
+    if (this.sent) throw new Error('Response already sent')
     this.sent = true
     this.method._rpc._sendMessage({
       bitfield: MESSAGE_RESPONSE,
@@ -51,7 +51,7 @@ class Request {
   }
 
   _error (err) {
-    if (this._sent) throw new Error('Response already sent')
+    if (this.sent) throw new Error('Response already sent')
     this.sent = true
     this.method._rpc._sendMessage({
       bitfield: MESSAGE_ERROR,
