@@ -3,21 +3,28 @@ const c = require('compact-encoding')
 const KNOWN_BYTE = 0x74 // 't' for tiny-buffer-rpc
 
 const Header = {
-  preencode (state, h) {
+  preencode(state, h) {
     c.uint.preencode(state, KNOWN_BYTE)
     c.uint.preencode(state, h.method)
     c.uint.preencode(state, h.id)
     c.uint.preencode(state, h.bitfield)
   },
-  encode (state, h) {
+  encode(state, h) {
     c.uint.encode(state, KNOWN_BYTE)
     c.uint.encode(state, h.method)
     c.uint.encode(state, h.id)
     c.uint.encode(state, h.bitfield)
   },
-  decode (state) {
+  decode(state) {
     const known = c.uint.decode(state)
-    if (known !== KNOWN_BYTE) throw Error('Message at start = ' + state.start + ' end = ' + state.end + ' does not look like a TinyRPC message')
+    if (known !== KNOWN_BYTE)
+      throw Error(
+        'Message at start = ' +
+          state.start +
+          ' end = ' +
+          state.end +
+          ' does not look like a TinyRPC message'
+      )
 
     return {
       method: c.uint.decode(state),
@@ -29,15 +36,15 @@ const Header = {
 module.exports.Header = Header
 
 module.exports.Message = {
-  preencode (state, m) {
+  preencode(state, m) {
     Header.preencode(state, m)
     if (m.data) c.raw.preencode(state, m.data)
   },
-  encode (state, m) {
+  encode(state, m) {
     Header.encode(state, m)
     if (m.data) c.raw.encode(state, m.data)
   },
-  decode (state) {
+  decode(state) {
     return {
       ...Header.decode(state),
       data: c.raw.decode(state)
@@ -46,14 +53,14 @@ module.exports.Message = {
 }
 
 module.exports.ErrorMessage = {
-  preencode (state, e) {
+  preencode(state, e) {
     state.end++ // flags
     c.int.preencode(state, e.errno || 0)
     if (e.message) c.string.preencode(state, e.message)
     if (e.stack) c.string.preencode(state, e.stack)
     if (e.code) c.string.preencode(state, e.code)
   },
-  encode (state, e) {
+  encode(state, e) {
     const start = state.start++ // flags
     c.int.encode(state, e.errno || 0)
 
@@ -73,7 +80,7 @@ module.exports.ErrorMessage = {
 
     state.buffer[start] = flags
   },
-  decode (state) {
+  decode(state) {
     const flags = c.uint.decode(state)
     return {
       errno: c.int.decode(state),

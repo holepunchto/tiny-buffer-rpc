@@ -24,14 +24,10 @@ const STREAM_HAS_ERROR = 0b10 << 10
 
 const REQUEST = MESSAGE_SEND | MESSAGE_REQUEST
 
-const {
-  Header,
-  Message,
-  ErrorMessage
-} = require('./messages.js')
+const { Header, Message, ErrorMessage } = require('./messages.js')
 
 class Request {
-  constructor (method, id, type, data) {
+  constructor(method, id, type, data) {
     this.type = type
     this.id = id
     this.method = method
@@ -39,7 +35,7 @@ class Request {
     this.data = data
   }
 
-  _respond (data) {
+  _respond(data) {
     if (this.sent) throw new Error('Response already sent')
     this.sent = true
     this.method._rpc._sendMessage({
@@ -50,7 +46,7 @@ class Request {
     })
   }
 
-  _error (err) {
+  _error(err) {
     if (this.sent) throw new Error('Response already sent')
     this.sent = true
     this.method._rpc._sendMessage({
@@ -63,7 +59,7 @@ class Request {
 }
 
 class RPCStream extends Duplex {
-  constructor (method, id, initiator, remoteId, dedup) {
+  constructor(method, id, initiator, remoteId, dedup) {
     super({ eagerOpen: true })
 
     this._method = method
@@ -84,9 +80,11 @@ class RPCStream extends Duplex {
     this._openCallback = null
   }
 
-  _sendBatch (batch) {
+  _sendBatch(batch) {
     const bitfield = MESSAGE_SEND | STREAM_DATA
-    const dataEncoding = this._initiator ? this._method._responseArray : this._method._requestArray
+    const dataEncoding = this._initiator
+      ? this._method._responseArray
+      : this._method._requestArray
     const data = c.encode(dataEncoding, batch)
 
     if (this._dedup) {
@@ -97,21 +95,21 @@ class RPCStream extends Duplex {
     this._method._sendMessage(this._remoteId, bitfield, data)
   }
 
-  _remoteOpened (remoteId) {
+  _remoteOpened(remoteId) {
     this._remoteId = remoteId
     this._continueOpen(null)
   }
 
-  _remoteClosed (err) {
+  _remoteClosed(err) {
     this._remoteId = -1
     this.destroy(err)
   }
 
-  _remotePause () {
+  _remotePause() {
     this._remotePaused = true
   }
 
-  _remoteResume () {
+  _remoteResume() {
     this._remotePaused = false
     if (!this._writeBatch) return
 
@@ -120,7 +118,7 @@ class RPCStream extends Duplex {
     this._continueWrite(null)
   }
 
-  _sendOpen () {
+  _sendOpen() {
     if (this._sentOpen) return
 
     let bitfield = MESSAGE_SEND | STREAM_OPEN
@@ -133,7 +131,7 @@ class RPCStream extends Duplex {
     this._method._sendMessage(id, bitfield, data)
   }
 
-  _open (cb) {
+  _open(cb) {
     this._sendOpen()
 
     if (this._initiator) {
@@ -143,19 +141,19 @@ class RPCStream extends Duplex {
     }
   }
 
-  _continueOpen (err) {
+  _continueOpen(err) {
     if (this._openCallback === null) return
     const cb = this._openCallback
     this._openCallback = null
     cb(err)
   }
 
-  _read (cb) {
+  _read(cb) {
     this._method._sendMessage(this._remoteId, MESSAGE_SEND | STREAM_RESUME)
     cb()
   }
 
-  _writev (batch, cb) {
+  _writev(batch, cb) {
     if (this._remotePaused) {
       this._writeBatch = batch
       this._writeCallback = cb
@@ -165,25 +163,29 @@ class RPCStream extends Duplex {
     }
   }
 
-  _continueWrite (err) {
+  _continueWrite(err) {
     if (this._writeCallback === null) return
     const cb = this._writeCallback
     this._writeCallback = null
     cb(err)
   }
 
-  _final (cb) {
+  _final(cb) {
     this._method._sendMessage(this._remoteId, MESSAGE_SEND | STREAM_END)
     cb()
   }
 
-  _predestroy () {
+  _predestroy() {
     this._initiatedDestroy = true
     this._continueWrite(null)
   }
 
-  _destroy (cb) {
-    if (this._remoteId === -1 || this._initiatedDestroy === false || this._method.destroyed) {
+  _destroy(cb) {
+    if (
+      this._remoteId === -1 ||
+      this._initiatedDestroy === false ||
+      this._method.destroyed
+    ) {
       // if the remote side already sent a close or we are the initiator and we didn't open,
       // then we don't need to send a close message
       cb()
@@ -202,7 +204,11 @@ class RPCStream extends Duplex {
 }
 
 class Method {
-  constructor (rpc, method, { request, response, dedup = false, onrequest, onstream } = {}) {
+  constructor(
+    rpc,
+    method,
+    { request, response, dedup = false, onrequest, onstream } = {}
+  ) {
     this.destroyed = false
 
     this._rpc = rpc
@@ -221,7 +227,7 @@ class Method {
     this._free = []
   }
 
-  async _callOnRequest (req) {
+  async _callOnRequest(req) {
     try {
       const data = await this._onrequest(req.data)
       req._respond(data)
@@ -230,7 +236,7 @@ class Method {
     }
   }
 
-  async _callOnSend (data) {
+  async _callOnSend(data) {
     try {
       await this._onrequest(data)
     } catch (err) {
@@ -238,14 +244,16 @@ class Method {
     }
   }
 
-  _createStream (initiator, remoteId) {
-    const id = this._free.length ? this._free.pop() : (this._streams.push(null) - 1)
+  _createStream(initiator, remoteId) {
+    const id = this._free.length
+      ? this._free.pop()
+      : this._streams.push(null) - 1
     const stream = new RPCStream(this, id, initiator, remoteId, this._dedup)
     this._streams[id] = stream
     return stream
   }
 
-  _handleStreamOpen (id, bitfield, state) {
+  _handleStreamOpen(id, bitfield, state) {
     if (bitfield & STREAM_IS_INITIATOR) {
       // Create the responder stream
       const stream = this._createStream(false, id)
@@ -256,7 +264,7 @@ class Method {
     }
   }
 
-  _handleStreamClose (id, bitfield, state) {
+  _handleStreamClose(id, bitfield, state) {
     const stream = this._streams[id]
     if (bitfield & STREAM_HAS_ERROR) {
       const err = ErrorMessage.decode(state)
@@ -268,22 +276,22 @@ class Method {
     this._free.push(id)
   }
 
-  _handleStreamPause (id) {
+  _handleStreamPause(id) {
     const stream = this._streams[id]
     if (stream) stream._remotePause()
   }
 
-  _handleStreamResume (id) {
+  _handleStreamResume(id) {
     const stream = this._streams[id]
     if (stream) stream._remoteResume()
   }
 
-  _handleStreamEnd (id) {
+  _handleStreamEnd(id) {
     const stream = this._streams[id]
     if (stream) stream.push(null)
   }
 
-  _handleStreamData (id, state) {
+  _handleStreamData(id, state) {
     const stream = this._streams[id]
     if (!stream) return
 
@@ -308,7 +316,7 @@ class Method {
     }
   }
 
-  _handleStreamSend (id, bitfield, state) {
+  _handleStreamSend(id, bitfield, state) {
     if (bitfield & STREAM_OPEN) {
       this._handleStreamOpen(id, bitfield, state)
     } else if (bitfield & STREAM_CLOSE) {
@@ -324,7 +332,7 @@ class Method {
     }
   }
 
-  _handleSend (id, bitfield, state) {
+  _handleSend(id, bitfield, state) {
     if (bitfield & STREAMING_MASK) {
       this._handleStreamSend(id, bitfield, state)
     } else {
@@ -332,7 +340,7 @@ class Method {
     }
   }
 
-  _handleRequest (id, bitfield, state) {
+  _handleRequest(id, bitfield, state) {
     if (this.destroyed) return
     if (bitfield & MESSAGE_SEND) {
       this._handleSend(id, bitfield, state)
@@ -342,7 +350,7 @@ class Method {
     }
   }
 
-  _handleResponse (req, bitfield, state) {
+  _handleResponse(req, bitfield, state) {
     if (this.destroyed) return
     if (bitfield & MESSAGE_ERROR) {
       const { errno, message, stack, code } = ErrorMessage.decode(state)
@@ -359,7 +367,7 @@ class Method {
     this._rpc._free.push(req.id)
   }
 
-  _sendMessage (id, bitfield, data) {
+  _sendMessage(id, bitfield, data) {
     this._rpc._sendMessage({
       method: this._method,
       bitfield,
@@ -368,24 +376,24 @@ class Method {
     })
   }
 
-  request (data) {
+  request(data) {
     if (this.destroyed) return Promise.reject(new Error('RPC destroyed'))
     const req = this._rpc._createRequest()
     this._sendMessage(req.id, MESSAGE_REQUEST, c.encode(this._request, data))
     return req.promise
   }
 
-  send (data) {
+  send(data) {
     if (this.destroyed) return
     this._sendMessage(0, MESSAGE_SEND, c.encode(this._request, data))
   }
 
-  createRequestStream () {
+  createRequestStream() {
     if (this.destroyed) throw new Error('RPC destroyed')
     return this._createStream(true, -1)
   }
 
-  destroy () {
+  destroy() {
     this.destroyed = true
     for (const s of this._streams) {
       if (s === null) continue
@@ -395,7 +403,7 @@ class Method {
 }
 
 module.exports = class TinyBufferRPC {
-  constructor (send) {
+  constructor(send) {
     this.destroyed = false
     this._send = send
     this._handlers = []
@@ -405,8 +413,8 @@ module.exports = class TinyBufferRPC {
     this._corked = false
   }
 
-  _createRequest () {
-    const id = this._free.length ? this._free.pop() : (this._reqs.push(null) - 1)
+  _createRequest() {
+    const id = this._free.length ? this._free.pop() : this._reqs.push(null) - 1
     const req = { id, promise: null, resolve: null, reject: null }
     this._reqs[id] = req
     req.promise = new Promise((resolve, reject) => {
@@ -416,7 +424,7 @@ module.exports = class TinyBufferRPC {
     return req
   }
 
-  _sendMessage (msg) {
+  _sendMessage(msg) {
     if (this.destroyed) return
     const data = c.encode(Message, msg)
     if (this._corked) {
@@ -426,26 +434,27 @@ module.exports = class TinyBufferRPC {
     this._send(data)
   }
 
-  register (id, opts = {}) {
-    if (this._handlers[id]) throw new Error('Handler for this ID already exists')
+  register(id, opts = {}) {
+    if (this._handlers[id])
+      throw new Error('Handler for this ID already exists')
     while (this._handlers.length <= id) this._handlers.push(null)
     const method = new Method(this, id, opts)
     this._handlers[id] = method
     return method
   }
 
-  cork () {
+  cork() {
     this._corked = true
   }
 
-  uncork () {
+  uncork() {
     this._corked = false
     // TODO: Use a slab pattern here to avoid the concat
     if (!this.destroyed) this._send(b4a.concat(this._pending))
     this._pending = []
   }
 
-  recv (buf) {
+  recv(buf) {
     const state = { start: 0, end: buf.length, buffer: buf }
     while (state.start < state.end) {
       const { id, bitfield, method } = Header.decode(state)
@@ -463,7 +472,7 @@ module.exports = class TinyBufferRPC {
     }
   }
 
-  destroy () {
+  destroy() {
     this.destroyed = true
     while (this._reqs.length) {
       const req = this._reqs.pop()

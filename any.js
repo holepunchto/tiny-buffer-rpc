@@ -5,13 +5,13 @@ const c = require('compact-encoding')
 const { uint, utf8 } = c
 
 const anyUndefined = {
-  preencode (state, n) {
+  preencode(state, n) {
     // do nothing
   },
-  encode (state, n) {
+  encode(state, n) {
     // do nothing
   },
-  decode (state) {
+  decode(state) {
     return undefined
   }
 }
@@ -19,19 +19,19 @@ const anyUndefined = {
 // "any" encoders here for helping just structure any object without schematising it
 
 const anyArray = {
-  preencode (state, arr) {
+  preencode(state, arr) {
     uint.preencode(state, arr.length)
     for (let i = 0; i < arr.length; i++) {
       any.preencode(state, arr[i])
     }
   },
-  encode (state, arr) {
+  encode(state, arr) {
     uint.encode(state, arr.length)
     for (let i = 0; i < arr.length; i++) {
       any.encode(state, arr[i])
     }
   },
-  decode (state) {
+  decode(state) {
     const arr = []
     let len = uint.decode(state)
     while (len-- > 0) {
@@ -42,7 +42,7 @@ const anyArray = {
 }
 
 const anyObject = {
-  preencode (state, o) {
+  preencode(state, o) {
     const keys = Object.keys(o)
     uint.preencode(state, keys.length)
     for (const key of keys) {
@@ -50,7 +50,7 @@ const anyObject = {
       any.preencode(state, o[key])
     }
   },
-  encode (state, o) {
+  encode(state, o) {
     const keys = Object.keys(o)
     uint.encode(state, keys.length)
     for (const key of keys) {
@@ -58,7 +58,7 @@ const anyObject = {
       any.encode(state, o[key])
     }
   },
-  decode (state) {
+  decode(state) {
     let len = uint.decode(state)
     const o = {}
     while (len-- > 0) {
@@ -82,25 +82,25 @@ const anyTypes = [
   anyObject
 ]
 
-const any = module.exports = {
-  preencode (state, o) {
+const any = (module.exports = {
+  preencode(state, o) {
     const t = getType(o)
     uint.preencode(state, t)
     anyTypes[t].preencode(state, o)
   },
-  encode (state, o) {
+  encode(state, o) {
     const t = getType(o)
     uint.encode(state, t)
     anyTypes[t].encode(state, o)
   },
-  decode (state) {
+  decode(state) {
     const t = uint.decode(state)
     if (t >= anyTypes.length) throw new Error('Unknown type: ' + t)
     return anyTypes[t].decode(state)
   }
-}
+})
 
-function getType (o) {
+function getType(o) {
   if (o === null) return 0
   if (o === undefined) return 1
   if (typeof o === 'boolean') return 2
