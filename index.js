@@ -82,9 +82,7 @@ class RPCStream extends Duplex {
 
   _sendBatch(batch) {
     const bitfield = MESSAGE_SEND | STREAM_DATA
-    const dataEncoding = this._initiator
-      ? this._method._responseArray
-      : this._method._requestArray
+    const dataEncoding = this._initiator ? this._method._responseArray : this._method._requestArray
     const data = c.encode(dataEncoding, batch)
 
     if (this._dedup) {
@@ -181,11 +179,7 @@ class RPCStream extends Duplex {
   }
 
   _destroy(cb) {
-    if (
-      this._remoteId === -1 ||
-      this._initiatedDestroy === false ||
-      this._method.destroyed
-    ) {
+    if (this._remoteId === -1 || this._initiatedDestroy === false || this._method.destroyed) {
       // if the remote side already sent a close or we are the initiator and we didn't open,
       // then we don't need to send a close message
       cb()
@@ -204,11 +198,7 @@ class RPCStream extends Duplex {
 }
 
 class Method {
-  constructor(
-    rpc,
-    method,
-    { request, response, dedup = false, onrequest, onstream } = {}
-  ) {
+  constructor(rpc, method, { request, response, dedup = false, onrequest, onstream } = {}) {
     this.destroyed = false
 
     this._rpc = rpc
@@ -245,9 +235,7 @@ class Method {
   }
 
   _createStream(initiator, remoteId) {
-    const id = this._free.length
-      ? this._free.pop()
-      : this._streams.push(null) - 1
+    const id = this._free.length ? this._free.pop() : this._streams.push(null) - 1
     const stream = new RPCStream(this, id, initiator, remoteId, this._dedup)
     this._streams[id] = stream
     return stream
@@ -435,8 +423,7 @@ module.exports = class TinyBufferRPC {
   }
 
   register(id, opts = {}) {
-    if (this._handlers[id])
-      throw new Error('Handler for this ID already exists')
+    if (this._handlers[id]) throw new Error('Handler for this ID already exists')
     while (this._handlers.length <= id) this._handlers.push(null)
     const method = new Method(this, id, opts)
     this._handlers[id] = method
