@@ -3,14 +3,14 @@ const c = require('compact-encoding')
 
 const RPC = require('.')
 
-test('basic request/response', async t => {
+test('basic request/response', async (t) => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
 
   rpc1.register(0, {
     request: c.string,
     response: c.string,
-    onrequest: data => {
+    onrequest: (data) => {
       t.is(data, 'hello')
       return 'world'
     }
@@ -22,22 +22,22 @@ test('basic request/response', async t => {
 
   t.is(await ping.request('hello'), 'world')
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('basic request/response at ID > 0', async t => {
+test('basic request/response at ID > 0', async (t) => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
 
   rpc1.register(1, {
     request: c.string,
     response: c.string,
-    onrequest: data => {
+    onrequest: (data) => {
       t.is(data, 'hello')
       return 'world'
     }
@@ -49,22 +49,22 @@ test('basic request/response at ID > 0', async t => {
 
   t.is(await ping.request('hello'), 'world')
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('parallel request/response', async t => {
+test('parallel request/response', async (t) => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
 
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onrequest: data => data
+    onrequest: (data) => data
   })
   const echo = rpc2.register(0, {
     request: c.uint,
@@ -80,22 +80,22 @@ test('parallel request/response', async t => {
     t.is(results[i], i)
   }
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('batched request/response', async t => {
+test('batched request/response', async (t) => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
 
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onrequest: data => data
+    onrequest: (data) => data
   })
   const echo = rpc2.register(0, {
     request: c.uint,
@@ -119,16 +119,16 @@ test('batched request/response', async t => {
     t.is(results[i], i)
   }
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     send2Called = true
     rpc1.recv(data)
   }
 })
 
-test('send does not get responses', async t => {
+test('send does not get responses', async (t) => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
 
@@ -137,7 +137,7 @@ test('send does not get responses', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onrequest: data => {
+    onrequest: (data) => {
       t.is(data, expected.pop())
     }
   })
@@ -152,15 +152,15 @@ test('send does not get responses', async t => {
 
   t.is(expected.length, 0)
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('eager teardown of stream', async t => {
+test('eager teardown of stream', async (t) => {
   t.plan(2)
 
   const rpc1 = new RPC(send1)
@@ -169,7 +169,7 @@ test('eager teardown of stream', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
+    onstream: (stream) => {
       t.fail('should never get here')
     }
   })
@@ -187,15 +187,15 @@ test('eager teardown of stream', async t => {
   })
   s.destroy(new Error('stop'))
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('basic bidirectional stream', async t => {
+test('basic bidirectional stream', async (t) => {
   t.plan(6)
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
@@ -205,8 +205,8 @@ test('basic bidirectional stream', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
-      stream.on('data', data => {
+    onstream: (stream) => {
+      stream.on('data', (data) => {
         stream.write(data)
         stream.write(data + 1)
       })
@@ -226,22 +226,22 @@ test('basic bidirectional stream', async t => {
   s.write(2)
   s.end()
 
-  s.on('data', data => {
+  s.on('data', (data) => {
     t.is(data, expected.shift())
   })
   s.on('end', () => {
     t.is(expected.length, 0)
   })
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('multiple parallel bidirectional streams, same method', async t => {
+test('multiple parallel bidirectional streams, same method', async (t) => {
   t.plan(12)
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
@@ -252,8 +252,8 @@ test('multiple parallel bidirectional streams, same method', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
-      stream.on('data', data => {
+    onstream: (stream) => {
+      stream.on('data', (data) => {
         stream.write(data)
         stream.write(data + 1)
       })
@@ -277,28 +277,28 @@ test('multiple parallel bidirectional streams, same method', async t => {
   s1.end()
   s2.end()
 
-  s1.on('data', data => {
+  s1.on('data', (data) => {
     t.is(data, expected1.shift())
   })
   s1.on('end', () => {
     t.is(expected1.length, 0)
   })
-  s2.on('data', data => {
+  s2.on('data', (data) => {
     t.is(data, expected2.shift())
   })
   s2.on('end', () => {
     t.is(expected2.length, 0)
   })
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('multiple parallel bidirectional streams, different method', async t => {
+test('multiple parallel bidirectional streams, different method', async (t) => {
   t.plan(12)
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
@@ -309,8 +309,8 @@ test('multiple parallel bidirectional streams, different method', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
-      stream.on('data', data => {
+    onstream: (stream) => {
+      stream.on('data', (data) => {
         stream.write(data)
         stream.write(data + 1)
       })
@@ -323,8 +323,8 @@ test('multiple parallel bidirectional streams, different method', async t => {
   rpc1.register(1, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
-      stream.on('data', data => {
+    onstream: (stream) => {
+      stream.on('data', (data) => {
         stream.write(data)
         stream.write(data + 2)
       })
@@ -352,28 +352,28 @@ test('multiple parallel bidirectional streams, different method', async t => {
   s1.end()
   s2.end()
 
-  s1.on('data', data => {
+  s1.on('data', (data) => {
     t.is(data, expected1.shift())
   })
   s1.on('end', () => {
     t.is(expected1.length, 0)
   })
-  s2.on('data', data => {
+  s2.on('data', (data) => {
     t.is(data, expected2.shift())
   })
   s2.on('end', () => {
     t.is(expected2.length, 0)
   })
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('basic bidirectional stream, remote destroys', async t => {
+test('basic bidirectional stream, remote destroys', async (t) => {
   t.plan(2)
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
@@ -381,8 +381,8 @@ test('basic bidirectional stream, remote destroys', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
-      stream.on('data', data => {
+    onstream: (stream) => {
+      stream.on('data', (data) => {
         stream.destroy()
       })
       stream.on('close', () => {
@@ -401,15 +401,15 @@ test('basic bidirectional stream, remote destroys', async t => {
     t.pass('stream closed')
   })
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('basic bidirectional stream, initator destroys', async t => {
+test('basic bidirectional stream, initator destroys', async (t) => {
   t.plan(2)
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
@@ -417,7 +417,7 @@ test('basic bidirectional stream, initator destroys', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
+    onstream: (stream) => {
       stream.write(1)
       stream.on('close', () => {
         t.pass('remote stream closed')
@@ -430,22 +430,22 @@ test('basic bidirectional stream, initator destroys', async t => {
   })
 
   const s = ping.createRequestStream()
-  s.on('data', data => {
+  s.on('data', (data) => {
     s.destroy()
   })
   s.on('close', () => {
     t.pass('stream closed')
   })
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
 
-test('dedup bidirectional stream', async t => {
+test('dedup bidirectional stream', async (t) => {
   t.plan(4)
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)
@@ -455,8 +455,8 @@ test('dedup bidirectional stream', async t => {
   rpc1.register(0, {
     request: c.uint,
     response: c.uint,
-    onstream: stream => {
-      stream.on('data', data => {
+    onstream: (stream) => {
+      stream.on('data', (data) => {
         stream.write(data)
       })
       stream.once('end', () => {
@@ -473,25 +473,25 @@ test('dedup bidirectional stream', async t => {
 
   const s = ping.createRequestStream()
   s.write(1)
-  await new Promise(resolve => setTimeout(resolve, 100))
+  await new Promise((resolve) => setTimeout(resolve, 100))
   s.write(1)
-  await new Promise(resolve => setTimeout(resolve, 100))
+  await new Promise((resolve) => setTimeout(resolve, 100))
   s.write(1)
-  await new Promise(resolve => setTimeout(resolve, 100))
+  await new Promise((resolve) => setTimeout(resolve, 100))
   s.write(2)
   s.end()
 
-  s.on('data', data => {
+  s.on('data', (data) => {
     t.is(data, expected.shift())
   })
   s.on('end', () => {
     t.is(expected.length, 0)
   })
 
-  function send1 (data) {
+  function send1(data) {
     rpc2.recv(data)
   }
-  function send2 (data) {
+  function send2(data) {
     rpc1.recv(data)
   }
 })
