@@ -17,7 +17,7 @@ const Header = {
   },
   decode(state) {
     const known = c.uint.decode(state)
-    if (known !== KNOWN_BYTE)
+    if (known !== KNOWN_BYTE) {
       throw Error(
         'Message at start = ' +
           state.start +
@@ -25,6 +25,7 @@ const Header = {
           state.end +
           ' does not look like a TinyRPC message'
       )
+    }
 
     return {
       method: c.uint.decode(state),
