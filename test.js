@@ -30,6 +30,34 @@ test('basic request/response', async (t) => {
   }
 })
 
+test('basic default request/response encoding', async (t) => {
+  const rpc1 = new RPC(send1)
+  const rpc2 = new RPC(send2)
+
+  const expected = ['hello', null]
+  const send = [Buffer.from('world'), Buffer.alloc(0)]
+  let i = 0
+  rpc1.register(0, {
+    onrequest: (data) => {
+      t.is(Buffer.isBuffer(data) ? data.toString() : data, expected[i])
+      const res = send[i]
+      i++
+      return res
+    }
+  })
+  const ping = rpc2.register(0)
+
+  t.alike(await ping.request(Buffer.from('hello')), Buffer.from('world'))
+  t.alike(await ping.request(Buffer.alloc(0)), null)
+
+  function send1(data) {
+    rpc2.recv(data)
+  }
+  function send2(data) {
+    rpc1.recv(data)
+  }
+})
+
 test('basic request/response at ID > 0', async (t) => {
   const rpc1 = new RPC(send1)
   const rpc2 = new RPC(send2)

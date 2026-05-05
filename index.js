@@ -204,8 +204,8 @@ class Method {
     this._rpc = rpc
     this._method = method
 
-    this._request = request || c.buffer
-    this._response = response || c.buffer
+    this._request = request || c.optionalBuffer
+    this._response = response || c.optionalBuffer
     this._requestArray = c.array(this._request)
     this._responseArray = c.array(this._response)
 
